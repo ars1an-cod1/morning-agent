@@ -100,7 +100,8 @@ def send_to_telegram(text: str, image: bytes | None = None) -> None:
         )
     else:
         r = requests.post(f"{api}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=20)
-    r.raise_for_status()
+    if not r.ok:  # Telegram explains the problem, e.g. "chat not found" (safe to print, no secrets)
+        raise RuntimeError(f"Telegram error {r.status_code}: {r.json().get('description', r.text)}")
     print("Sent to Telegram" + (" (with card)." if image else "."))
 
 
