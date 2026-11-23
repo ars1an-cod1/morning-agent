@@ -1,54 +1,68 @@
-# morning-agent
+# morning-agent ☀️
 
-A personal AI agent that runs by itself every morning on GitHub Actions:
-date + Riga weather + today's RTU lessons + deadlines → a short Telegram message.
+A personal AI agent that plans my mornings. Every day before my first class it sends me a
+Telegram card with the Riga weather, today's classes at Riga Technical University (RTU)
+and a countdown of my upcoming assignment deadlines. It runs entirely on free tiers.
 
-Model: **Groq** (free tier, open-source `openai/gpt-oss-120b`). Switching to Claude later only changes `llm.py`.
+<p align="center"><img src="docs/card-example.png" width="360" alt="Example morning card"></p>
+<p align="center"><sub>Example card (sample data)</sub></p>
+
+## Highlights
+
+- **Agent with tool calling:** the LLM decides which tools to call (date, weather, classes, deadlines), my code runs them and sends the results back until the model is done.
+- **$0 hosting:** GitHub Actions runs it on a schedule, and the model runs on Groq's free tier (`openai/gpt-oss-120b`).
+- **Tokens only where they matter:** the AI writes a 3-line caption. The card is drawn with Pillow in plain Python, so it uses no tokens.
+- **Working around a locked portal:** the university's Moodle has no calendar export and needs 2FA, so the bot can't log in. A bookmarklet uses my logged-in browser session to read the deadlines and saves them **encrypted** (PBKDF2 + AES-GCM) to a repository variable.
+- **Private by design:** keys live in GitHub Secrets, deadline data is encrypted, and the message content is never printed to the public Actions log.
 
 ## How it works
 
-```
-GitHub Actions (04:23 UTC) → agent.py
-   ↓ asks the model, giving it a task + tool list
-   ↓ the model asks for tools → we run them → send results back   (loop)
-   ↓ the model writes a short caption
-   ↓ card.py draws the picture card from the same tools (plain Python, no AI → no tokens)
-Telegram (photo + caption)
+```mermaid
+flowchart TD
+    A["GitHub Actions<br/>every day 06:23 Riga"] --> B["agent.py<br/>agent loop"]
+    B <--> C["Groq LLM<br/>tool calling"]
+    B --> D["tools.py"]
+    D --> E["Open-Meteo<br/>weather"]
+    D --> F["RTU timetable<br/>today's classes"]
+    D --> G["Encrypted deadlines<br/>from the bookmarklet"]
+    B --> H["card.py<br/>draws the card"]
+    B --> I["Telegram<br/>card + caption"]
 ```
 
 | File | What it does |
 |---|---|
-| `agent.py` | The agent loop: ask the model → run tools → send results back → send the message to Telegram |
-| `tools.py` | The agent's tools (plain Python functions) and the descriptions shown to the model |
-| `card.py` | Draws the dark, iPhone-widget style card (weather, lessons, deadline countdown) with Pillow |
-| `bookmarklet/` | One-click bookmark that syncs e-studijas deadlines to the `DEADLINES_JSON` variable (see its README) |
-| `llm.py` | The only place that talks to the model (Groq) |
-| `.github/workflows/morning.yml` | Runs every day at 04:23 UTC (06:23 Riga in winter), or by hand |
+| `agent.py` | The agent loop: ask the model → run the tools it asks for → send results back → send the card to Telegram |
+| `llm.py` | The only place that talks to the model (Groq). Switching providers only changes this file |
+| `tools.py` | The agent's tools (plain Python functions) and their descriptions for the model |
+| `card.py` | Draws the dark, iPhone-widget style card with Pillow |
+| `bookmarklet/` | One-click bookmark that syncs e-studijas (Moodle) deadlines, encrypted ([setup](bookmarklet/README.md)) |
+| `.github/workflows/morning.yml` | The schedule: runs daily at 04:23 UTC, or by hand |
 
-## Setup (GitHub → Settings → Secrets and variables → Actions)
+## Setup
 
-**Secrets** tab:
+GitHub → **Settings → Secrets and variables → Actions → Secrets**:
 
 | Secret | Where to get it | Required |
 |---|---|---|
 | `GROQ_API_KEY` | console.groq.com → API Keys | ✅ |
-| `TELEGRAM_BOT_TOKEN` | Telegram → @BotFather → /newbot | ✅ (without it the message only appears in the logs) |
-| `TELEGRAM_CHAT_ID` | Send your bot a message, then open `https://api.telegram.org/bot<TOKEN>/getUpdates` | ✅ |
-| `RTU_SEMESTER_PROGRAM_ID` | Your group's ID on nodarbibas.rtu.lv: DevTools → Network → `getSemesterProgEventList` → `semesterProgramId` | ✅ for classes |
-| `DEADLINES_KEY` | A password you make up; the same one you type into the bookmarklet once | ✅ for deadlines |
-| `ORTUS_ICAL_URL` | iCal link (fallback only; RTU has export disabled, so use the bookmarklet instead) | Optional |
+| `TELEGRAM_BOT_TOKEN` | Telegram → @BotFather → `/newbot` | ✅ |
+| `TELEGRAM_CHAT_ID` | Message your bot, then open `https://api.telegram.org/bot<TOKEN>/getUpdates` | ✅ |
+| `RTU_SEMESTER_PROGRAM_ID` | nodarbibas.rtu.lv → DevTools → Network → `getSemesterProgEventList` → `semesterProgramId` | For classes |
+| `DEADLINES_KEY` | A password you make up; you type the same one into the bookmarklet once | For deadlines |
+| `ORTUS_ICAL_URL` | An iCal link (fallback if your Moodle allows calendar export) | Optional |
 
-**Variables** tab (optional):
-- `MESSAGE_LANGUAGE` — e.g. `Turkish`. Default: `English`.
+Optional variable: `MESSAGE_LANGUAGE` (e.g. `Turkish`, default `English`).
 
-## Run it
+Then: **Actions → Morning agent → Run workflow** to test.
 
-GitHub → **Actions** → **Morning agent** → **Run workflow**.
-
-Locally:
+Run locally:
 
 ```bash
 pip install -r requirements.txt
 export GROQ_API_KEY=...   # Windows PowerShell: $env:GROQ_API_KEY="..."
-python agent.py
+python agent.py           # also saves the card as morning.png
 ```
+
+## Stack
+
+Python · Groq LLM API (tool calling) · GitHub Actions · Telegram Bot API · Pillow · Web Crypto / `cryptography`

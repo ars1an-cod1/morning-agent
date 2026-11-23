@@ -152,6 +152,21 @@ LESSON_TYPES = [  # (prefix RTU uses, short label, color)
 ]
 
 
+KIND_STYLE = {"Lecture": ("LECTURE", BLUE), "Lab": ("LAB", GREEN), "Practice": ("PRACTICE", ORANGE), "Exam": ("EXAM", RED)}
+
+
+def _lesson_style(lesson: dict):
+    """Tag text, color and name. Uses the type from tools.py; 'Lecture + Practice' → 'LECT + PR'."""
+    kind = lesson.get("type")
+    if kind:
+        parts = kind.split(" + ")
+        label, color = KIND_STYLE.get(parts[0], ("CLASS", PURPLE))
+        if len(parts) > 1:
+            label = " + ".join(p[:3].upper() if p != "Practice" else "PR" for p in parts)
+        return label, color, lesson.get("subject", "")
+    return _lesson_type(lesson.get("subject", ""))
+
+
 def _lesson_type(subject: str):
     for prefix, label, color in LESSON_TYPES:
         if subject.startswith(prefix):
@@ -183,6 +198,11 @@ def make_card(today: dict, weather: dict, lessons: list[dict], deadlines: dict) 
     """
     events = deadlines.get("events") if isinstance(deadlines, dict) else None
     connected = events is not None
+    status = deadlines.get("status", "") if isinstance(deadlines, dict) else ""
+    if "unlock" in status:
+        problem_short, problem_long = "Wrong password", "Can't unlock deadlines: check the DEADLINES_KEY secret"
+    else:
+        problem_short, problem_long = "Not synced yet", "Click the bookmarklet on e-studijas to sync deadlines"
     events = events or []
     shown_events = events[:5]
 
@@ -231,7 +251,7 @@ def make_card(today: dict, weather: dict, lessons: list[dict], deadlines: dict) 
         c.text(x1 + 36, y + 345, nxt.get("date", ""), 26, GRAY)
     else:
         c.text(x1 + 32, y + 100, "—", 110, TILE_2, bold=True)
-        msg = "Nothing this week" if connected else "ORTUS not connected"
+        msg = "Nothing this week" if connected else problem_short
         c.text(x1 + 36, y + 290, msg, 30, WHITE if connected else GRAY, bold=connected)
     y += 400 + PAD
 
@@ -244,7 +264,7 @@ def make_card(today: dict, weather: dict, lessons: list[dict], deadlines: dict) 
     if not lessons:
         c.text(x0 + 36, ry + 10, "Free day — no classes", 36, GREEN, bold=True)
     for lesson in lessons:
-        label, color, name = _lesson_type(lesson.get("subject", ""))
+        label, color, name = _lesson_style(lesson)
         c.box(x0 + 36, ry + 4, 8, row_h - 30, fill=color, r=4)
         c.text(x0 + 66, ry + 2, lesson.get("start", ""), 32, WHITE, bold=True)
         c.text(x0 + 66, ry + 44, lesson.get("end", ""), 26, GRAY)
@@ -263,7 +283,7 @@ def make_card(today: dict, weather: dict, lessons: list[dict], deadlines: dict) 
     c.text(x0 + 36, y + 36, "UPCOMING DEADLINES", 24, GRAY, bold=True)
     ry = y + 96
     if not connected:
-        c.text(x0 + 36, ry + 10, "Connect ORTUS calendar to see deadlines", 30, GRAY)
+        c.text(x0 + 36, ry + 10, c.fit(problem_long, 28, inner - 72), 28, GRAY)
     elif not shown_events:
         c.text(x0 + 36, ry + 10, "No deadlines in the next 7 days", 32, GREEN, bold=True)
     for ev in shown_events:

@@ -98,6 +98,33 @@ def _clock(t: dict | None) -> str:
     return f"{t.get('hour', 0):02d}:{t.get('minute', 0):02d}" if isinstance(t, dict) else ""
 
 
+LESSON_KINDS = {"lect": "Lecture", "lab": "Lab", "pr": "Practice", "prac": "Practice", "pract": "Practice", "exam": "Exam"}
+# One or more type words at the start, e.g. "Lect. ", "Lect, Pr. ", "Lab, Pr. "
+_KIND_PREFIX = re.compile(r"^(?:(?:Lect|Lab|Pract|Prac|Pr|Exam)(?:\.\s*,?\s*|\s*,\s*))+", re.IGNORECASE)
+# Lecturer names at the end, e.g. ", Ē.Masaļskis" or ", M.Biskars, P.Liepiņš"
+_LECTURER_SUFFIX = re.compile(r"(?:,\s*\w{1,3}\.\s?[\w-]+)+\s*$")
+
+
+def split_subject(raw: str, lecturer: str = "") -> tuple[str, str]:
+    """
+    RTU names look like "Lect, Pr. Basics of Computer Control, A.Supoņenkovs".
+    Returns (kind, clean name): ("Lecture + Practice", "Basics of Computer Control").
+    """
+    raw = (raw or "").strip()
+    kinds = []
+    m = _KIND_PREFIX.match(raw)
+    if m:
+        for word in re.findall(r"[A-Za-z]+", m.group(0)):
+            kind = LESSON_KINDS.get(word.lower())
+            if kind and kind not in kinds:
+                kinds.append(kind)
+        raw = raw[m.end():]
+    if lecturer and raw.endswith(lecturer):
+        raw = raw[: -len(lecturer)]
+    raw = _LECTURER_SUFFIX.sub("", raw).strip(" ,")
+    return " + ".join(kinds) or "Class", raw
+
+
 def parse_schedule(events: list[dict], first_day: date, last_day: date) -> list[dict]:
     """Keeps lessons between first_day and last_day and turns them into short, readable records."""
     lessons = []
@@ -105,15 +132,18 @@ def parse_schedule(events: list[dict], first_day: date, last_day: date) -> list[
         day = _event_day(e)
         if day is None or not (first_day <= day <= last_day):
             continue
+        # RTU sends both Latvian and English (…En) versions; prefer English
+        lecturer = e.get("lecturerInfoTextEn") or e.get("lecturerInfoText") or ""
+        kind, subject = split_subject(e.get("eventTempNameEn") or e.get("eventTempName") or "", lecturer)
         lessons.append(
             {
                 "date": day.strftime("%d.%m.%Y"),
                 "start": _clock(e.get("customStart")),
                 "end": _clock(e.get("customEnd")),
-                # RTU sends both Latvian and English (…En) versions; prefer English
-                "subject": e.get("eventTempNameEn") or e.get("eventTempName") or "",
+                "type": kind,
+                "subject": subject,
                 "room": e.get("roomInfoTextEn") or e.get("roomInfoText") or "",
-                "lecturer": e.get("lecturerInfoTextEn") or e.get("lecturerInfoText") or "",
+                "lecturer": lecturer,
             }
         )
     return sorted(lessons, key=lambda x: (x["date"][6:] + x["date"][3:5] + x["date"][:2], x["start"]))
