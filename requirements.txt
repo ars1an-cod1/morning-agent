@@ -1,0 +1,5 @@
+requests>=2.31
+icalendar>=5.0
+pillow>=10.0
+matplotlib>=3.8  # only for its bundled DejaVu fonts
+cryptography>=42  # unlocks the encrypted deadlines
