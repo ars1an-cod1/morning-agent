@@ -1,11 +1,8 @@
 name: Morning agent
 
 on:
-  schedule:
-    # GitHub uses UTC. 04:23 UTC = 06:23 in Riga in winter, 07:23 in summer.
-    # Not on the hour on purpose: GitHub delays jobs scheduled at :00 the most (busiest minute).
-    # Starting early leaves room for delays so the message still arrives before the first lesson.
-    - cron: "23 4 * * *"
+  # Started by the Cloudflare Worker (worker/worker.js) every morning on time, or by /morning in Telegram.
+  # GitHub's own `schedule:` was starting 9-10 hours late, so it is not used anymore.
   workflow_dispatch: # also runnable by hand: Actions tab → "Run workflow"
 
 jobs:
@@ -13,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: write # only for the last step (keeps the schedule on)
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -33,9 +29,3 @@ jobs:
           RTU_SEMESTER_PROGRAM_ID: ${{ secrets.RTU_SEMESTER_PROGRAM_ID }}
           DEADLINES_JSON: ${{ vars.DEADLINES_JSON }} # saved by the bookmarklet, encrypted (logs show only scrambled text)
           DEADLINES_KEY: ${{ secrets.DEADLINES_KEY }} # password that unlocks it
-      # GitHub pauses scheduled workflows in public repos after 60 days without commits.
-      # This keeps the morning schedule switched on.
-      - name: Keep the schedule switched on
-        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/morning.yml/enable"
-        env:
-          GH_TOKEN: ${{ github.token }}
