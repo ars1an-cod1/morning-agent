@@ -49,6 +49,7 @@ def run_tool(name: str, arguments: str | None) -> str:
 
 def run(task: str = "Prepare today's morning message.") -> str:
     messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": task}]
+    done_calls = set()  # (tool, arguments) already run: the model sometimes asks for the same tool again and again
 
     for step in range(1, MAX_STEPS + 1):
         reply = ask_llm(messages, TOOLS)
@@ -61,9 +62,18 @@ def run(task: str = "Prepare today's morning message.") -> str:
         for call in tool_calls:
             name, arguments = call["function"]["name"], call["function"].get("arguments")
             print(f"[step {step}] tool: {name}({arguments or ''})")
-            messages.append({"role": "tool", "tool_call_id": call["id"], "content": run_tool(name, arguments)})
+            key = (name, json.dumps(json.loads(arguments or "{}"), sort_keys=True))
+            if key in done_calls:
+                result = json.dumps({"note": "You already have this result above. Do not call it again; write the message now."})
+            else:
+                done_calls.add(key)
+                result = run_tool(name, arguments)
+            messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
 
-    return "The agent hit its step limit and could not finish the message."
+    # Out of steps: ask once more WITHOUT tools, so the model has to write the message with what it has
+    print("Step limit reached, asking for the final message without tools.")
+    messages.append({"role": "user", "content": "Stop using tools. Write the caption now with the information you have."})
+    return (ask_llm(messages, []).get("content") or "").strip() or "Good morning! Have a great day. ☀️"
 
 
 def _safe(function, *args, fallback=None):

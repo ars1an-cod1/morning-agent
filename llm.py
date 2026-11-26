@@ -28,9 +28,8 @@ def ask_llm(messages: list[dict], tools: list[dict]) -> dict:
         json={
             "model": MODEL,
             "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
             "temperature": 0.3,
+            **({"tools": tools, "tool_choice": "auto"} if tools else {}),  # no tools → the model must answer in text
         },
         timeout=60,
     )
