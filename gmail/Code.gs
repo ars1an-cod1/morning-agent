@@ -6,8 +6,11 @@
  * (recruiters, interviews, applications, LinkedIn job alerts for internships).
  * Every evening at ~20:00: sends a digest of the day's important emails.
  *
+ * /gmail in Telegram: the Cloudflare Worker calls this script's Web App URL (doGet),
+ * which checks new emails right away and sends the list of important ones since the last digest.
+ *
  * Setup: see gmail/README.md. Script Properties needed:
- *   GROQ_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+ *   GROQ_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, WEBAPP_KEY
  */
 
 const SEEN_LABEL = "morning-agent/seen"; // added to every email we looked at, so it is checked only once
@@ -61,6 +64,22 @@ function sendEveningDigest() {
     : "🌙 Bugün önemli bir e-posta yok.";
   sendTelegram(text);
   props.deleteProperty("DIGEST");
+}
+
+// ---------- /gmail: called by the Cloudflare Worker ----------
+function doGet(e) {
+  const key = PropertiesService.getScriptProperties().getProperty("WEBAPP_KEY");
+  if (!key || !e || !e.parameter || e.parameter.key !== key) {
+    return ContentService.createTextOutput("forbidden");
+  }
+  checkNewEmails(); // new important emails are sent one by one
+  const items = JSON.parse(PropertiesService.getScriptProperties().getProperty("DIGEST") || "[]");
+  sendTelegram(
+    items.length
+      ? `📬 Son özetten beri önemli e-postalar (${items.length})\n\n` + items.map((x) => "• " + x).join("\n")
+      : "📬 Son özetten beri önemli bir e-posta yok."
+  );
+  return ContentService.createTextOutput("ok");
 }
 
 // ---------- AI: is this email worth a message? ----------

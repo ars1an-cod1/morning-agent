@@ -20,4 +20,14 @@ Emails stay unread; checked ones get the `morning-agent/seen` label.
    (Google shows "unverified app": **Advanced → Go to morning-agent-gmail**, because it's my own script).
 5. Telegram should say "Gmail izleyici kuruldu".
 
+### /gmail command (optional)
+
+6. Add one more Script Property: `WEBAPP_KEY` (a long random word you make up).
+7. **Deploy → New deployment** → type **Web app** → Execute as **Me**, Who has access **Anyone** → Deploy → copy the **Web app URL**.
+   ("Anyone" is safe here: without the right `key` the script answers "forbidden".)
+8. In the Cloudflare Worker add secrets `GMAIL_WEBAPP_URL` (that URL) and `GMAIL_KEY` (same word as `WEBAPP_KEY`).
+9. Send `/gmail` to the bot.
+
+After changing `Code.gs`, use **Deploy → Manage deployments → Edit → Version: New version**, so the Web App runs the new code.
+
 Change what counts as a good internship in `MY_PROFILE` at the top of `Code.gs`.
