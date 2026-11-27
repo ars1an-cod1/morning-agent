@@ -37,7 +37,8 @@ flowchart TD
 | `tools.py` | The agent's tools (plain Python functions) and their descriptions for the model |
 | `card.py` | Draws the dark, iPhone-widget style card with Pillow |
 | `bookmarklet/` | One-click bookmark that syncs e-studijas (Moodle) deadlines, encrypted ([setup](bookmarklet/README.md)) |
-| `worker/worker.js` | Cloudflare Worker (free): starts the morning run on time every day and answers my Telegram messages with Groq |
+| `worker/worker.js` | Cloudflare Worker (free): starts the morning run on time every day and answers my Telegram messages with Groq, with conversation memory (KV) |
+| `gmail/` | Google Apps Script: Telegram alerts for emails from real people and job emails (incl. LinkedIn job alerts), evening digest ([setup](gmail/README.md)) |
 | `.github/workflows/morning.yml` | The job that draws and sends the card, started by the Worker or by hand |
 
 ## Setup

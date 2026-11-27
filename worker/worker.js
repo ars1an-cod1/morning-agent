@@ -10,11 +10,15 @@
  *
  * Secrets (Worker → Settings → Variables and Secrets):
  *   GROQ_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GITHUB_TOKEN, WEBHOOK_SECRET
+ * Binding (Worker → Settings → Bindings → KV namespace), optional:
+ *   MEMORY: keeps the last messages so the bot remembers the conversation. /reset clears it.
  */
 
 const REPO = "ars1an-cod1/morning-agent";
 const WORKFLOW = "morning.yml";
 const MODEL = "openai/gpt-oss-120b";
+const MEMORY_MESSAGES = 20; // last 20 messages (10 questions + 10 answers)
+const MEMORY_DAYS = 7; // a conversation is forgotten after 7 days without messages
 
 const SYSTEM_PROMPT = `You are Arslan's personal assistant on Telegram. Arslan is a Computer Systems
 student at Riga Technical University (RTU) in Riga, learning software development with Python.
@@ -25,6 +29,7 @@ If he asks for his class schedule or deadlines, tell him to send /morning to get
 const HELP = `Merhaba! 👋
 • Bana istediğini yaz, cevap vereyim.
 • /morning: sabah kartını şimdi gönder
+• /reset: konuşma hafızasını sil
 • /help: bu mesaj`;
 
 export default {
@@ -65,30 +70,52 @@ async function handleMessage(update, env) {
 
   if (text === "/start" || text === "/help") return sendMessage(env, chatId, HELP);
 
+  if (text === "/reset") {
+    if (env.MEMORY) await env.MEMORY.delete(memoryKey(chatId));
+    return sendMessage(env, chatId, "🧹 Hafıza silindi, yeni bir konuşma başlıyor.");
+  }
+
   if (text === "/morning") {
     const ok = await startMorningCard(env);
     return sendMessage(env, chatId, ok ? "☀️ Kart hazırlanıyor, 1-2 dakika içinde gelir." : "⚠️ GitHub'a ulaşamadım, GITHUB_TOKEN'ı kontrol et.");
   }
 
   await sendChatAction(env, chatId); // shows "typing..." while Groq thinks
-  const answer = await askGroq(env, text);
+  const history = await loadMemory(env, chatId);
+  const answer = await askGroq(env, history, text);
+  await saveMemory(env, chatId, [...history, { role: "user", content: text }, { role: "assistant", content: answer }]);
   return sendMessage(env, chatId, answer);
 }
 
-async function askGroq(env, text) {
+// --- Memory (Cloudflare KV): one entry per chat with the last messages ---
+
+function memoryKey(chatId) {
+  return `chat:${chatId}`;
+}
+
+async function loadMemory(env, chatId) {
+  if (!env.MEMORY) return []; // no KV binding yet: work without memory
+  return (await env.MEMORY.get(memoryKey(chatId), "json")) || [];
+}
+
+async function saveMemory(env, chatId, messages) {
+  if (!env.MEMORY) return;
+  await env.MEMORY.put(memoryKey(chatId), JSON.stringify(messages.slice(-MEMORY_MESSAGES)), {
+    expirationTtl: MEMORY_DAYS * 24 * 3600,
+  });
+}
+
+async function askGroq(env, history, text) {
   const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.GROQ_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: MODEL,
       temperature: 0.5,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: text },
-      ],
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history, { role: "user", content: text }],
     }),
   });
-  if (!r.ok) return `⚠️ Groq hatası (${r.status}). Biraz sonra tekrar dene.`;
+  if (!r.ok) return `⚠️ Groq hatası (${r.status}). Biraz sonra tekrar dene. (Sorun sürerse /reset yaz.)`;
   const data = await r.json();
   return (data.choices?.[0]?.message?.content || "…").trim();
 }
