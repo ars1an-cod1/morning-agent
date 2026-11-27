@@ -6,10 +6,11 @@
  *    GitHub's own schedule was starting hours late, so the Worker now does the timing.
  * 2. Telegram webhook (always on):
  *    when Arslan writes to the bot, the Worker asks Groq and replies.
- *    Commands: /morning (send the card now), /help.
+ *    Commands: /morning (send the card now), /gmail (important emails now), /reset, /help.
  *
  * Secrets (Worker → Settings → Variables and Secrets):
  *   GROQ_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GITHUB_TOKEN, WEBHOOK_SECRET
+ *   GMAIL_WEBAPP_URL, GMAIL_KEY (for /gmail: the Apps Script Web App in gmail/Code.gs)
  * Binding (Worker → Settings → Bindings → KV namespace), optional:
  *   MEMORY: keeps the last messages so the bot remembers the conversation. /reset clears it.
  */
@@ -24,11 +25,13 @@ const SYSTEM_PROMPT = `You are Arslan's personal assistant on Telegram. Arslan i
 student at Riga Technical University (RTU) in Riga, learning software development with Python.
 Answer in the language he writes in (usually Turkish). Keep answers short and clear: he prefers
 concise, conceptual explanations over long texts. Plain text only, no Markdown tables.
-If he asks for his class schedule or deadlines, tell him to send /morning to get today's card.`;
+If he asks for his class schedule or deadlines, tell him to send /morning to get today's card.
+If he asks about his emails or job alerts, tell him to send /gmail.`;
 
 const HELP = `Merhaba! 👋
 • Bana istediğini yaz, cevap vereyim.
 • /morning: sabah kartını şimdi gönder
+• /gmail: önemli e-postalar ve iş ilanları
 • /reset: konuşma hafızasını sil
 • /help: bu mesaj`;
 
@@ -73,6 +76,15 @@ async function handleMessage(update, env) {
   if (text === "/reset") {
     if (env.MEMORY) await env.MEMORY.delete(memoryKey(chatId));
     return sendMessage(env, chatId, "🧹 Hafıza silindi, yeni bir konuşma başlıyor.");
+  }
+
+  if (text === "/gmail") {
+    if (!env.GMAIL_WEBAPP_URL || !env.GMAIL_KEY) return sendMessage(env, chatId, "⚠️ Gmail bağlı değil (GMAIL_WEBAPP_URL / GMAIL_KEY eksik).");
+    await sendMessage(env, chatId, "📬 Gmail kontrol ediliyor...");
+    // The Apps Script sends the result to Telegram itself; it can take a while, so we don't wait for an answer here
+    const r = await fetch(`${env.GMAIL_WEBAPP_URL}?key=${encodeURIComponent(env.GMAIL_KEY)}`).catch(() => null);
+    if (r && (await r.text()).includes("forbidden")) return sendMessage(env, chatId, "⚠️ GMAIL_KEY, Apps Script'teki WEBAPP_KEY ile aynı değil.");
+    return;
   }
 
   if (text === "/morning") {
