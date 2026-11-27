@@ -72,11 +72,16 @@ function doGet(e) {
   if (!key || !e || !e.parameter || e.parameter.key !== key) {
     return ContentService.createTextOutput("forbidden");
   }
-  checkNewEmails(); // new important emails are sent one by one
   const items = JSON.parse(PropertiesService.getScriptProperties().getProperty("DIGEST") || "[]");
+  if (e.parameter.mode === "list") {
+    // For the chat agent: just return today's important emails, send nothing
+    return ContentService.createTextOutput(JSON.stringify({ emails: items })).setMimeType(ContentService.MimeType.JSON);
+  }
+  checkNewEmails(); // new important emails are sent one by one
+  const fresh = JSON.parse(PropertiesService.getScriptProperties().getProperty("DIGEST") || "[]");
   sendTelegram(
-    items.length
-      ? `📬 Son özetten beri önemli e-postalar (${items.length})\n\n` + items.map((x) => "• " + x).join("\n")
+    fresh.length
+      ? `📬 Son özetten beri önemli e-postalar (${fresh.length})\n\n` + fresh.map((x) => "• " + x).join("\n")
       : "📬 Son özetten beri önemli bir e-posta yok."
   );
   return ContentService.createTextOutput("ok");

@@ -29,3 +29,5 @@ jobs:
           RTU_SEMESTER_PROGRAM_ID: ${{ secrets.RTU_SEMESTER_PROGRAM_ID }}
           DEADLINES_JSON: ${{ vars.DEADLINES_JSON }} # saved by the bookmarklet, encrypted (logs show only scrambled text)
           DEADLINES_KEY: ${{ secrets.DEADLINES_KEY }} # password that unlocks it
+          WORKER_URL: ${{ secrets.WORKER_URL }} # Cloudflare Worker: gets classes + deadlines for the chat
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
