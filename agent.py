@@ -12,12 +12,14 @@ with the model's short message as the caption.
 
 import json
 import os
+from datetime import datetime
 
 import requests
 
 from card import make_card
 from llm import ask_llm
 from tools import FUNCTIONS, TOOLS, classes, deadlines, today, weather
+from tools import RIGA, _course_name, decrypt_deadlines
 
 MAX_STEPS = 8  # safety limit so the loop can never run forever
 LANGUAGE = os.environ.get("MESSAGE_LANGUAGE", "English")  # language of the morning message
@@ -115,6 +117,37 @@ def send_to_telegram(text: str, image: bytes | None = None) -> None:
     print("Sent to Telegram" + (" (with card)." if image else "."))
 
 
+def chat_snapshot() -> dict:
+    """Classes for the next 2 weeks + upcoming deadlines, so the Telegram chat agent can answer questions."""
+    snapshot = {
+        "updated_at": datetime.now(RIGA).isoformat(timespec="minutes"),
+        "classes": _safe(classes, 13, fallback={"lessons": []}).get("lessons", []),
+        "deadlines": [],
+    }
+    saved = os.environ.get("DEADLINES_JSON")
+    if saved:
+        try:
+            events = json.loads(decrypt_deadlines(saved, os.environ.get("DEADLINES_KEY", ""))).get("events", [])
+            now = datetime.now(RIGA).timestamp()
+            snapshot["deadlines"] = [
+                {"title": e.get("title", ""), "course": _course_name(e.get("course", "")), "due": e["due"]}
+                for e in events
+                if e["due"] >= now
+            ]
+        except Exception as error:  # noqa: BLE001
+            print(f"Could not read deadlines for the chat: {type(error).__name__}")
+    return snapshot
+
+
+def push_to_worker() -> None:
+    """Sends the snapshot to the Cloudflare Worker (stored privately in its KV). Optional."""
+    url, key = os.environ.get("WORKER_URL"), os.environ.get("WORKER_KEY")
+    if not url or not key:
+        return
+    r = requests.post(f"{url.rstrip('/')}/data", json=chat_snapshot(), headers={"X-Worker-Key": key}, timeout=30)
+    print(f"Chat data sent to the Worker ({r.status_code}).")
+
+
 if __name__ == "__main__":
     message = run()
     if os.environ.get("GITHUB_ACTIONS"):  # Actions logs are public in a public repo: don't show the content
@@ -131,3 +164,8 @@ if __name__ == "__main__":
         card = None
 
     send_to_telegram(message, card)
+
+    try:
+        push_to_worker()
+    except Exception as error:  # noqa: BLE001 - the card is already sent; the chat data is a bonus
+        print(f"Could not send chat data to the Worker: {type(error).__name__}")
