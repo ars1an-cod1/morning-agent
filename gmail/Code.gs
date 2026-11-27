@@ -20,9 +20,16 @@ const BODY_CHARS = 1500; // only the start of an email is sent to Groq
 
 // What counts as a good internship for me (used for LinkedIn job alerts)
 const MY_PROFILE = `Computer Systems student at Riga Technical University (2nd of 3 years).
-Skills: Python, SQL, some C, Java, Rust; interested in AI agents, data/lakehouse, backend.
-Looking for: internships or junior roles. Locations: Berlin/Germany and Riga/Latvia first,
-also Estonia, Lithuania, Izmir (Türkiye) or remote.`;
+Skills: Python, SQL, some C, Java, Rust; builds AI agents with LLM APIs, learning data/lakehouse engineering.
+WANTED roles (internship, working student or junior):
+- LLM / AI engineering (AI agents, LLM apps, applied ML, AI automation)
+- Data engineering (pipelines, ETL, lakehouse, Spark, analytics engineering)
+- Platform / cloud / DevOps engineering (infrastructure, Kubernetes, CI/CD, SRE)
+NOT wanted: QA/testing, manual testing, sales, marketing, support, design, pure frontend, non-tech roles.
+LANGUAGE: he does not speak Latvian or German. Only keep roles where English is the working language.
+Treat a job title written in Latvian or German (e.g. "prakse", "praktikants", "specialists", "Praktikum",
+"Werkstudent", "Entwickler", "(m/w/d)") as requiring the local language, unless the email says English is enough.
+Locations: Berlin/Germany and Riga/Latvia first, also Estonia, Lithuania, Izmir (Türkiye) or remote.`;
 
 // Obvious noise, skipped without asking the AI (saves Groq requests)
 const SKIP_SENDERS = /(no-?reply|noreply|notifications?|newsletter|news|marketing|promo|billing|invoice|receipts?|orders?|payments?|support|info)@/i;
@@ -88,8 +95,8 @@ function classify(from, subject, body, isJobSender) {
 - "person": written by a real person to him (professor, classmate, friend, family, a recruiter writing personally)
 - "job": about jobs or internships: interview invitations, application updates, recruiter messages, job alerts
 - "skip": everything else (payments, receipts, ads, newsletters, automatic notifications, security codes)
-${isJobSender ? `This is a job alert or ATS email. Only keep internships/junior roles that fit his profile; if none fit, use "skip".\nHis profile: ${MY_PROFILE}` : ""}
-Reply ONLY with JSON: {"category": "person|job|skip", "summary": "1-2 short sentences in Turkish: who wants what, or which roles (company, city)"}
+${isJobSender ? `This is a job alert or ATS email. Keep ONLY the roles that match his WANTED roles AND have English as the working language (see his profile). Ignore all other roles in the email; if none are left, use "skip". Application updates and interview invitations from companies are always "job".\nHis profile: ${MY_PROFILE}` : ""}
+Reply ONLY with JSON: {"category": "person|job|skip", "summary": "1-2 short sentences in Turkish: who wants what, or the kept roles as 'Role – Company, City'"}
 
 From: ${from}
 Subject: ${subject}
